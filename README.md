@@ -37,6 +37,8 @@ This project implements a simple yet comprehensive **Library Management System**
 
 ##  Database Schema
 
+![ERD](https://github.com/naveenjangid-59/library_management_sysmtem_SQL/blob/main/ER_diagram.png)
+
 The system includes the following tables:
 
 - `branch`: Stores library branch info and manager assignments
