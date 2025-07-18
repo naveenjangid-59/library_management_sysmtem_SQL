@@ -8,7 +8,30 @@ This project implements a simple yet comprehensive **Library Management System**
 
 - **Database**: MySQL 8+
 - **Tool**: MySQL Workbench
-- **Language**: SQL (DDL, DML, Views, CTEs, Stored Procedures)
+- **Language**: SQL (DDL, DML,Constraints & Keys, CTEs, Stored Procedures)
+
+---
+
+## Used SQL oncepts
+
+- Constraints & Keys
+- CTEs
+- Stored Procedures
+- Database creation and selection
+- Table creation and deletion
+- CRUD operations
+- String manipulation 
+- Date functions
+- Conditional logic (IF, ELSE)
+- Join operations (INNER JOIN, LEFT JOIN)
+- Aliasing
+- Grouping (GROUP BY)
+- Aggregation (COUNT, SUM)
+- Filtering (WHERE, HAVING)
+- Sorting (ORDER BY)
+- Subqueries
+- Data formatting and casting
+
 
 ---
 
