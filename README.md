@@ -55,16 +55,392 @@ Foreign key constraints and relationships (including `1:1`, `1:N`) have been use
 
 ---
 
-##  Sample Queries Used
+##  creating tables
 
 ```sql
--- Find overdue books
-SELECT *, DATEDIFF(NOW(), issued_date) AS days_issued_ago
+-- CREATE DATABASE lms;
+USE lms;
+
+
+-- create branch table
+DROP TABLE IF EXISTS branch;
+CREATE TABLE branch(
+	branch_id VARCHAR(45) PRIMARY KEY,
+    manager_id VARCHAR(45),
+    branch_adress VARCHAR(45),
+    contact_no VARCHAR(45)
+);
+
+
+-- create employees table
+DROP TABLE IF EXISTS employees;
+CREATE TABLE employees(
+	emp_id VARCHAR(45) PRIMARY KEY,
+    emp_name VARCHAR(45),
+    position VARCHAR(45),
+    salary DECIMAL(10,2),
+    emp_branch_id VARCHAR(45) -- FK
+);
+
+-- create employees table
+DROP TABLE IF EXISTS books;
+CREATE TABLE books(
+	isbn VARCHAR(255) PRIMARY KEY,
+    book_title VARCHAR(255),
+    category VARCHAR(255),
+    rental_price DECIMAL(5,2),
+    status VARCHAR(255),
+    author VARCHAR(255),
+    publisher VARCHAR(255)
+);
+
+-- create employees table
+DROP TABLE IF EXISTS members;
+CREATE TABLE members(
+	member_id VARCHAR(255) PRIMARY KEY,
+    member_name VARCHAR(255),
+    member_address VARCHAR(255),
+    reg_date DATE
+);
+
+
+
+-- create employees table
+DROP TABLE IF EXISTS issued_status;
+CREATE TABLE issued_status(
+	issued_id VARCHAR(255) PRIMARY KEY,
+    issued_member_id VARCHAR(255),  -- FK
+    issued_date DATE,
+    issued_book_isbn VARCHAR(255), -- FK
+	issued_emp_id VARCHAR(255)  -- FK
+);
+
+-- create employees table
+DROP TABLE IF EXISTS return_status;
+CREATE TABLE return_status(
+	return_id VARCHAR(255) PRIMARY KEY,
+    issued_id VARCHAR(255),   -- FK
+    return_date DATE,
+    book_condition VARCHAR(255)
+);
+```
+
+
+## Add constraints
+
+```sql
+-- add constraints
+ALTER TABLE employees
+ADD CONSTRAINT fk_branch
+FOREIGN KEY (emp_branch_id)
+REFERENCES branch(branch_id);
+
+
+ALTER TABLE issued_status
+ADD CONSTRAINT fk_issued_member_id FOREIGN KEY (issued_member_id) REFERENCES members(member_id),
+ADD CONSTRAINT fk_issued_emp_id FOREIGN KEY (issued_emp_id) REFERENCES employees(emp_id),
+ADD CONSTRAINT fk_issued_book_isbn FOREIGN KEY (issued_book_isbn) REFERENCES books(isbn);
+    
+
+ALTER TABLE return_status
+ADD CONSTRAINT fk_issued_id FOREIGN KEY (issued_id) REFERENCES issued_status(issued_id);
+```
+
+## Retrieve All Books Issued by a Specific Employee 
+
+```sql
+
+SELECT * 
 FROM issued_status
+WHERE issued_emp_id = 'E105';
+```
+
+## List members who have issued more than one book
+
+```sql
+
+SELECT issued_emp_id,COUNT(*) AS no_of_issued_books
+FROM issued_status
+GROUP BY issued_emp_id
+HAVING COUNT(*)>1;
+```
+
+
+##  how many times a book has been issued (Count)
+
+```sql
+
+SELECT isbn,book_title,COUNT(*) 
+FROM books b
+JOIN issued_status ist
+ON ist.issued_book_isbn = b.isbn
+GROUP BY isbn
+ORDER BY COUNT(*) DESC;
+```
+
+## total rental income by a category
+
+```sql
+
+SELECT category,SUM(rental_price),COUNT(*)
+FROM books b
+JOIN issued_status ist
+ON ist.issued_book_isbn = b.isbn
+GROUP BY category
+ORDER BY SUM(rental_price) DESC;
+
+```
+
+
+## list employees with their b ranch manager's name and their branch details
+
+```sql
+
+WITH t AS
+	(SELECT emp_id,emp_name,position,branch_id,manager_id
+	FROM employees e
+	JOIN branch b 
+	ON b.branch_id = e.emp_branch_id)
+SELECT t.emp_id,t.emp_name,t.position AS emp_position,e2.emp_name AS manager_name,e2.emp_id 
+FROM t
+JOIN employees e2 
+ON e2.emp_id = t.manager_id;
+
+```
+
+
+
+## List of books yet not returned
+
+```sql
+
+WITH t AS(SELECT ist.issued_id,ist.issued_book_isbn,rst.return_id
+FROM issued_status ist
+LEFT JOIN return_status rst
+ON ist.issued_id = rst.issued_id
+WHERE rst.return_id IS NULL)
+SELECT t.issued_id, b.isbn, b.book_title FROM t
+JOIN books b
+ON t.issued_book_isbn = b.isbn;
+
+```
+
+
+## Write a query to identify members who have overdue books (assume a 30-day return period). Display the member's name, book title, issue date, and days overdue.
+
+```sql
+
+WITH temp AS 
+	(WITH t AS(SELECT ist.issued_id,ist.issued_book_isbn,rst.return_id,ist.issued_member_id,ist.issued_date
+	FROM issued_status ist
+	LEFT JOIN return_status rst
+	ON ist.issued_id = rst.issued_id
+	WHERE rst.return_id IS NULL)
+	SELECT t.issued_id,t.issued_member_id,t.issued_date, b.isbn,b.book_title,m.member_name FROM t
+	JOIN books b
+	ON t.issued_book_isbn = b.isbn
+	JOIN members m
+	ON m.member_id = t.issued_member_id)
+SELECT *,DATEDIFF(NOW(), issued_date) AS days_issued_ago FROM temp
 WHERE DATEDIFF(NOW(), issued_date) > 30;
 
--- Books not yet returned
-SELECT b.book_title
+```
+
+
+
+## Write a query to identify members who have overdue books (assume a 30-day return period). Display the member's name, book title, issue date, and days overdue.
+
+```sql
+
+WITH temp AS 
+	(WITH t AS(SELECT ist.issued_id,ist.issued_book_isbn,rst.return_id,ist.issued_member_id,ist.issued_date
+	FROM issued_status ist
+	LEFT JOIN return_status rst
+	ON ist.issued_id = rst.issued_id
+	WHERE rst.return_id IS NULL)
+	SELECT t.issued_id,t.issued_member_id,t.issued_date, b.isbn,b.book_title,m.member_name FROM t
+	JOIN books b
+	ON t.issued_book_isbn = b.isbn
+	JOIN members m
+	ON m.member_id = t.issued_member_id)
+SELECT *,DATEDIFF(NOW(), issued_date) AS days_issued_ago FROM temp
+WHERE DATEDIFF(NOW(), issued_date) > 30;
+
+```
+
+
+
+
+## stored procedure to make book issue entry (input fields - member_id,book_isbn,emp_id)
+
+```sql
+
+DELIMITER $$
+
+CREATE PROCEDURE issue_book (
+  IN input_member_id VARCHAR(255),
+  IN input_isbn VARCHAR(255),
+  IN input_emp_id VARCHAR(255)
+)
+BEGIN
+  DECLARE new_issue_id VARCHAR(255);
+  DECLARE new_status VARCHAR(255);
+
+  SELECT status INTO new_status
+  FROM books
+  WHERE isbn = input_isbn;
+
+  IF new_status = 'yes' THEN
+    SELECT CONCAT('IS', IFNULL(MAX(CAST(SUBSTRING_INDEX(issued_id, 'IS', -1) AS UNSIGNED)), 0) + 1)
+    INTO new_issue_id
+    FROM issued_status;
+
+    INSERT INTO issued_status (issued_id, issued_member_id, issued_date, issued_book_isbn, issued_emp_id)
+    VALUES (new_issue_id, input_member_id, DATE(NOW()), input_isbn, input_emp_id);
+
+    UPDATE books
+    SET status = 'no'
+    WHERE isbn = input_isbn;
+
+    SELECT 'book issued successfully' AS message;
+  ELSE
+    SELECT 'book not available' AS message;
+  END IF;
+END $$
+
+DELIMITER ;
+
+
+CALL issue_book('C105','978-0-14-118776-1','E103');
+
+```
+
+
+
+## stored procedure to get a return entry of a book (input fields - issued_id,book_condition)
+
+```sql
+
+DELIMITER $$
+
+CREATE PROCEDURE return_book (
+  IN input_issue_id VARCHAR(255),
+  IN book_condition VARCHAR(255)
+)
+BEGIN
+  DECLARE new_return_id VARCHAR(255);
+  DECLARE new_book_isbn VARCHAR(255);
+  DECLARE current_status VARCHAR(255);
+
+  SELECT issued_book_isbn
+  INTO new_book_isbn
+  FROM issued_status
+  WHERE issued_id = input_issue_id;
+
+  SELECT status
+  INTO current_status
+  FROM books
+  WHERE isbn = new_book_isbn;
+
+  IF current_status = 'no' THEN
+    SELECT CONCAT('RS', IFNULL(MAX(CAST(SUBSTRING_INDEX(return_id, 'RS', -1) AS UNSIGNED)), 0) + 1)
+    INTO new_return_id
+    FROM return_status;
+
+    INSERT INTO return_status (return_id, issued_id, return_date, book_condition)
+    VALUES (new_return_id, input_issue_id, DATE(NOW()), book_condition);
+
+    UPDATE books
+    SET status = 'yes'
+    WHERE isbn = new_book_isbn;
+
+    SELECT 'book returned successfully' AS message;
+  ELSE
+    SELECT 'please enter correct details' AS message;
+  END IF;
+END $$
+
+DELIMITER ;
+
+
+CALL return_book('IS144','damaged');
+
+```
+
+## branch_performance_report (number of book issued, number of books returned,revenue generated)
+
+```sql
+
+SELECT e.emp_branch_id AS branch_id,SUM(b.rental_price),COUNT(*)
 FROM issued_status ist
-LEFT JOIN return_status rst ON ist.issued_id = rst.issued_id
-WHERE rst.return_id IS NULL;
+JOIN employees e
+ON ist.issued_emp_id = e.emp_id
+JOIN books b
+ON ist.issued_book_isbn = b.isbn
+GROUP BY emp_branch_id;
+
+```
+
+
+
+## Create a Table of active_members containing members who have issued at least one book in the last 6 months.
+
+```sql
+
+WITH m2 AS(WITH t AS (SELECT *
+FROM issued_status 
+WHERE issued_date >= DATE(NOW()) - INTERVAL 6 MONTH)
+SELECT m.member_id,COUNT(*) AS num_of_times FROM t
+JOIN members m
+ON t.issued_member_id = m.member_id
+GROUP BY m.member_id)
+SELECT m2.member_id,m3.member_name,m2.num_of_times FROM m2
+JOIN members m3
+ON m3.member_id = m2.member_id;
+
+```
+
+
+
+## Find Employees with the Most Book Issues Processed
+
+```sql
+
+WITH t AS
+	(
+		SELECT issued_member_id,COUNT(*) AS count
+		FROM lms.issued_status
+		GROUP BY issued_member_id
+		ORDER BY COUNT(*) DESC
+	)
+SELECT 
+issued_member_id AS member_id,member_name,count
+FROM t
+JOIN members m
+ON t.issued_member_id = m.member_id;
+
+```
+
+
+
+## find employees which possibly harm books or return damaged books
+
+```sql
+
+WITH t AS 
+	(SELECT * FROM return_status 
+	 WHERE book_condition = 'damaged')
+SELECT member_id,member_name,COUNT(*) AS count
+FROM t
+JOIN issued_status ist
+ON t.issued_id = ist.issued_id
+JOIN members m
+ON m.member_id = ist.issued_member_id
+GROUP BY member_id,member_name
+ORDER BY count DESC;
+
+```
+
+
+
+
