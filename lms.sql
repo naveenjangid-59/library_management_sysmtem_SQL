@@ -77,10 +77,87 @@ WHERE DATEDIFF(NOW(), issued_date) > 30;
 
 
 -- stored procedure to get a return entry of a book (input fields - issued_id,book_condition)
+DELIMITER $$
+
+CREATE PROCEDURE return_book (
+  IN input_issue_id VARCHAR(255),
+  IN book_condition VARCHAR(255)
+)
+BEGIN
+  DECLARE new_return_id VARCHAR(255);
+  DECLARE new_book_isbn VARCHAR(255);
+  DECLARE current_status VARCHAR(255);
+
+  SELECT issued_book_isbn
+  INTO new_book_isbn
+  FROM issued_status
+  WHERE issued_id = input_issue_id;
+
+  SELECT status
+  INTO current_status
+  FROM books
+  WHERE isbn = new_book_isbn;
+
+  IF current_status = 'no' THEN
+    SELECT CONCAT('RS', IFNULL(MAX(CAST(SUBSTRING_INDEX(return_id, 'RS', -1) AS UNSIGNED)), 0) + 1)
+    INTO new_return_id
+    FROM return_status;
+
+    INSERT INTO return_status (return_id, issued_id, return_date, book_condition)
+    VALUES (new_return_id, input_issue_id, DATE(NOW()), book_condition);
+
+    UPDATE books
+    SET status = 'yes'
+    WHERE isbn = new_book_isbn;
+
+    SELECT 'book returned successfully' AS message;
+  ELSE
+    SELECT 'please enter correct details' AS message;
+  END IF;
+END $$
+
+DELIMITER ;
+
 CALL return_book('IS144','damaged');
 
 
+
 -- stored procedure to make book issue entry (input fields - member_id,book_isbn,emp_id)
+DELIMITER $$
+
+CREATE PROCEDURE issue_book (
+  IN input_member_id VARCHAR(255),
+  IN input_isbn VARCHAR(255),
+  IN input_emp_id VARCHAR(255)
+)
+BEGIN
+  DECLARE new_issue_id VARCHAR(255);
+  DECLARE new_status VARCHAR(255);
+
+  SELECT status INTO new_status
+  FROM books
+  WHERE isbn = input_isbn;
+
+  IF new_status = 'yes' THEN
+    SELECT CONCAT('IS', IFNULL(MAX(CAST(SUBSTRING_INDEX(issued_id, 'IS', -1) AS UNSIGNED)), 0) + 1)
+    INTO new_issue_id
+    FROM issued_status;
+
+    INSERT INTO issued_status (issued_id, issued_member_id, issued_date, issued_book_isbn, issued_emp_id)
+    VALUES (new_issue_id, input_member_id, DATE(NOW()), input_isbn, input_emp_id);
+
+    UPDATE books
+    SET status = 'no'
+    WHERE isbn = input_isbn;
+
+    SELECT 'book issued successfully' AS message;
+  ELSE
+    SELECT 'book not available' AS message;
+  END IF;
+END $$
+
+DELIMITER ;
+
 CALL issue_book('C102','978-0-14-118776-1','E103');
 
 
